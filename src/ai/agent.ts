@@ -56,13 +56,14 @@ export class Agent {
                         }
                     """
 
-                    You must answer the question based on the article, but do not reference the article to the user. Respond in a polite and direct manner. If you don't find the information from the provided article useful, simply respond that you couldn't find any relevant information.
+                    You should answer the question based on the article, but do not refer the user to the article. Answer politely and directly. If you do not find the information in the article provided useful, simply respond that you could not find any relevant information. If the user provides a link, please call tool web_search_preview for the link provided and provide the answer to the question.
                 `,
                 input: `${userMessageContents}\n ${JSON.stringify(source)}`,
+                tools: [ { type: 'web_search_preview' }]
             });
 
             const answer = response.output_text;
-            logger.debug('Received answer:', answer);
+            logger.debug(`Received answer: ${answer}`);
 
             return {answer, source};
         } catch (error) {

@@ -40,7 +40,7 @@ I generally use Qdrant because it's a high-performance vector database built in 
 
 I use OpenAI due to its comprehensive documentation, multi-language support, and the fact that it works well with Portuguese (which I typically use in my projects). However, in this case, I could experiment with other models like Anthropic or even use Amazon Bedrock to allow flexibility in choosing models.
 
-Unfortunately, I wasn't able to implement in time the tool to fetch a link provided in a user's query. But the basic idea would be to create a tool for the agent to detect a link in the query, call that tool to fetch the HTML content, then use another agent to structure the content, and finally pass it back to our response agent to answer the user.
+I implemented the tool already integrated by Open AI to search for links provided by the user, I tested it a few times and it worked well, of course if I had more time I would have created a custom tool that would be a more robust way to deal with this type of situation, however my time was limited and this was a quick solution that I was able to implement.
 
 ## 🆙 Improvements
 
@@ -53,3 +53,5 @@ Given more time, I could implement several improvements to this project. Here ar
 * Summarize the user’s conversations if they become too long.
 
 * Store the tokens and messages of each conversation.
+
+* Improve the search for user-provided links by creating a custom tool and including it for the agent
