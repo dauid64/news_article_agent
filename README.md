@@ -1,4 +1,4 @@
-7# News Article Agent
+# News Article Agent
 
 ## ⚙️ Setup
 
