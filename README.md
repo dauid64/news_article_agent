@@ -1,4 +1,4 @@
-# News Article Agent
+7# News Article Agent
 
 ## ⚙️ Setup
 
@@ -51,3 +51,5 @@ Given more time, I could implement several improvements to this project. Here ar
 * Store the tokens and messages of each conversation.
 
 * Improve the search for user-provided links by creating a custom tool and including it for the agent
+
+* Add text splitting in RAG
