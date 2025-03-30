@@ -1,0 +1,30 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Start server",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/src/server.ts",
+        "restart": true,
+        "runtimeExecutable": "nodemon",
+        "runtimeArgs": [
+          "-r",
+          "ts-node/register"
+        ],
+      },
+      {
+        "name": "Launch current file",
+        "type": "node",
+        "request": "launch",
+        "runtimeArgs": [
+          "-r",
+          "ts-node/register"
+        ],
+        "args": [
+          "${file}"
+        ],
+        "console": "integratedTerminal"
+      },
+    ]
+  }
