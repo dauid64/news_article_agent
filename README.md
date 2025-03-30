@@ -1,7 +1,3 @@
-Aqui está a versão totalmente traduzida para o inglês do seu markdown:
-
----
-
 # News Article Agent
 
 ## ⚙️ Setup
