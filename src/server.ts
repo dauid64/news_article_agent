@@ -1,6 +1,9 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import agentRouter from './routes/agent';
 import logger from './logger';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const port = 3000;

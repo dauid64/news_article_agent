@@ -8,10 +8,6 @@
         "program": "${workspaceFolder}/src/server.ts",
         "restart": true,
         "runtimeExecutable": "nodemon",
-        "runtimeArgs": [
-          "-r",
-          "ts-node/register"
-        ],
       },
       {
         "name": "Launch current file",

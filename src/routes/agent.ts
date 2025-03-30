@@ -1,10 +1,15 @@
 import { Router } from "express";
+import { Agent } from '../ai/agent';
 
 const router = Router();
 
-router.get("/", (req, res) => {
+router.post("/", async (req, res) => {
+  const { query } = req.body;
+  const agent = new Agent()
+  const {answer, source} = await agent.sendUserMessage(query)
   res.json({
-    message: "Hello from the agent route!",
+    answer: answer,
+    source: source,
   });
 });
 
