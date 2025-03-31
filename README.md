@@ -10,7 +10,7 @@ Run the following command in the repository’s source code:
 npm i
 ```
 
-After that, you’ll need to rename the `.env-example` file and fill in the environment variables according to your information.
+After that, you’ll need to rename the `.env-example` file to `.env` and fill in the environment variables according to your information.
 
 ## 🚀 Running
 
