@@ -114,7 +114,7 @@ async function main() {
         await consumer.run({
             eachMessage: async ({ topic, partition, message }) => {
                 logger.debug('----------------------------------------');
-            
+
                 if (message.value) {  
                     try {
                         // Parse the message value

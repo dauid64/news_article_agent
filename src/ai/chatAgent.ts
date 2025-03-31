@@ -16,10 +16,15 @@ const tools = [{
           "url": {
               "type": "string",
               "description": "The URL to get content from.",
-          }
+          },
+            "userMessageContents": {
+                "type": "string",
+                "description": "The user message question.",
+            },
       },
       "required": [
-          "url"
+          "url",
+        "userMessageContents"
       ],
       "additionalProperties": false
   },
@@ -40,7 +45,9 @@ export class ChatAgent {
         this.qdrantClient = new QdrantClient({url: 'http://127.0.0.1:6333'});
         
         this.systemPrompt = `
-        You are a assistant who specializes in answering article-based questions. The user will submit their question to you, and below it, a reference article will be provided for you to use in your answer. The article will be provided in the following JSON format that is enclosed in three quotation marks.
+        You are a assistant who specializes in answering article-based questions. 
+        The user will submit their question to you, and below it, a reference article will be provided for you to use in your answer. 
+        The article will be provided in the following JSON format that is enclosed in three quotation marks.
 
         """
             {
@@ -51,7 +58,9 @@ export class ChatAgent {
             }
         """
 
-        You should answer the question based on the article, but do not refer the user to the article. Answer politely and directly. If you do not find the information in the article provided useful, simply respond that you could not find any relevant information. If the user provides a link, please call tool web_search_preview for the link provided and provide the answer to the question.
+        You should answer the question based on the article, but do not refer the user to the article. 
+        Answer politely and directly. If you do not find the information in the article provided useful, simply respond that you could not find any relevant information. 
+        If the user provides a link, please call tool web_search_preview for the link provided and provide the answer to the question.
         `
     }
 
@@ -79,12 +88,28 @@ export class ChatAgent {
         );
     }
 
-    private async get_link_content(url: string): Promise<Article> {
+    private async getLinkContent(url: string, userMessageContents: string): Promise<string> {
         const cleanHTMLAgent = new CleanHTMLAgent();
         const responsePage = await fetch(url);
         const htmlContent = await responsePage.text();
         const source = await cleanHTMLAgent.extractDataFromHTML(htmlContent);
-        return source;
+        const response = await this.client.responses.create({
+            model: 'gpt-4o',
+            instructions: this.systemPrompt,
+            input: `${userMessageContents}\n ${JSON.stringify(source)}`,
+        });
+        const answer = response.output_text;
+        return answer;
+    }
+
+    private async callFunction(functionName: string, args: any): Promise<any> {
+        if (functionName === 'get_link_content') {
+            const url = args.url;
+            const userMessageContents = args.userMessageContents;
+            return this.getLinkContent(url, userMessageContents);
+        } else {
+            throw new Error(`Unknown function name: ${functionName}`);
+        }
     }
 
     public async sendUserMessage(userMessageContents: string): Promise<{answer: string, source: Article}> {
@@ -114,22 +139,11 @@ export class ChatAgent {
             });
 
             let answer = response.output_text;
-            if (answer === '' && response.output.length > 0) {
-              const functionaName = (response.output[0] as ResponseFunctionToolCall).name;
-              const functionArgs = JSON.parse((response.output[0] as ResponseFunctionToolCall).arguments);
-              
-              if (functionaName === 'get_link_content') {
-                const url = functionArgs.url;
-                source = await this.get_link_content(url);
-                const response = await this.client.responses.create({
-                    model: 'gpt-4o',
-                    instructions: this.systemPrompt,
-                    input: `${userMessageContents}\n ${JSON.stringify(source)}`,
-                });
-                answer = response.output_text;
-              } else {
-                throw new Error(`Unknown function name: ${functionaName}`);
-              }
+            if (answer === '' && response.output.length > 0 && response.output[0].type === 'function_call') {
+              const functionaName = response.output[0].name;
+              const functionArgs = JSON.parse(response.output[0].arguments);
+
+              answer = await this.callFunction(functionaName, functionArgs);
             }
             logger.debug(`Received answer: ${answer}`);
 
