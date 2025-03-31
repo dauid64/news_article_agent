@@ -1,11 +1,11 @@
-import { Kafka } from "kafkajs";
+import { Consumer, Kafka } from "kafkajs";
 import * as dotenv from 'dotenv';
 import logger from "../logger";
 import OpenAI from "openai";
-import * as cheerio from 'cheerio';
-import { Article } from "../models/articles";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { randomUUID } from "crypto";
+import { CleanHTMLAgent } from "../ai/cleanHTMLAgent";
+import { split_text } from "../ai/splitter";
 
 dotenv.config();
 
@@ -21,25 +21,29 @@ async function generateEmbedding(texto: string, openAiClient: OpenAI): Promise<n
       console.error('Error generate Embedding:', error);
       throw error;
     }
-  }
+}
 
-async function main() {
-    logger.info('Starting Rag...');
-
-    logger.info('Open AI Connection...');
+async function connectOpenAI(): Promise<OpenAI> {
     const openAiClient = new OpenAI({
         apiKey: process.env['OPENAI_API_KEY'],
     });
+    return openAiClient;
+}
 
-    logger.info('Qdrant Connection and Config...');
+async function connectQdrant(): Promise<QdrantClient> {
     const qdrantClient = new QdrantClient({url: 'http://127.0.0.1:6333'});
+
+    return qdrantClient;
+}
+
+async function create_collection_if_not_exists(qdrantClient: QdrantClient, collectionName: string) {
     const responseCollections = await qdrantClient.getCollections();
     const collectionNames = responseCollections.collections.map((collection) => collection.name);
-    if (collectionNames.includes("articles")) {
+    if (collectionNames.includes(collectionName)) {
         logger.info('Collection already exists');
     } else {
         logger.info('Creating collection...');
-        await qdrantClient.createCollection("articles", {
+        await qdrantClient.createCollection(collectionName, {
             vectors: {
                 size: 1536,
                 distance: "Cosine",
@@ -51,8 +55,9 @@ async function main() {
         });
         logger.info('Collection created');
     }
+}
 
-    logger.info('kafta Connection and Config...');
+async function connectKafkaAndConfig(): Promise<Consumer> {
     const kafka = new Kafka({
         clientId: process.env.KAFKA_CLIENT_ID as string,
         brokers: [process.env.KAFKA_BROKER as string],
@@ -80,6 +85,24 @@ async function main() {
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
 
+    return consumer
+}
+
+async function main() {
+    logger.info('Starting Rag...');
+
+    logger.info('Open AI Connection...');
+    const openAiClient = await connectOpenAI();
+
+    logger.info('Qdrant Connection and Create Colletion...');
+    const qdrantClient = await connectQdrant();
+    await create_collection_if_not_exists(qdrantClient, 'articles');
+
+    logger.info('kafta Config...');
+    const consumer = await connectKafkaAndConfig();
+
+    const cleanHTMLAgent = new CleanHTMLAgent();
+
     try {
         logger.info('Connecting to Kafka...');
         await consumer.connect();
@@ -92,74 +115,46 @@ async function main() {
             eachMessage: async ({ topic, partition, message }) => {
                 logger.debug('----------------------------------------');
             
-            if (message.value) {  
-                try {
-                    const jsonData = JSON.parse(message.value.toString());
-                    const url = jsonData.value.url;
-                    logger.debug(`URL: ${url}`);
-                    const responsePage = await fetch(url);
-                    const htmlContent = await responsePage.text();
-                    const $ = cheerio.load(htmlContent);
-                    $('script, style').remove(); // Remove Scripts and CSS
-                    const cleanHtml = $('body').text();
+                if (message.value) {  
+                    try {
+                        // Parse the message value
+                        const jsonData = JSON.parse(message.value.toString());
+                        const url = jsonData.value.url;
+                        logger.debug(`URL: ${url}`);
 
-                    const response = await openAiClient.responses.create({
-                        model: 'gpt-4o',
-                        instructions: `
-                            You are a assistant specialized in extracting data from HTML, your task is to extract the data and return it in JSON format with the following data and format which will be between three quotes.
+                        // Fetch the HTML content from the URL
+                        const responsePage = await fetch(url);
+                        const htmlContent = await responsePage.text();
+                        const article = await cleanHTMLAgent.extractDataFromHTML(htmlContent)
 
-                            """
-                                {
-                                    "title": "Title of the Article",
-                                    "content": "Content of the Article",
-                                    "url": "URL of the Article",
-                                    "date": "Published date of the Article",
-                                }
-                            """
-                        `,
-                        input: `${cleanHtml}`,
-                    });
-                    const dataResponse = response.output_text;
-                    const match = dataResponse.match(/```json\s*([\s\S]*?)\s*```/);
-                    if (match && match[1]) {
-                        const jsonString = match[1];
-                        const jsonData: Article = JSON.parse(jsonString);
-                        const embedding = await generateEmbedding(jsonData.content, openAiClient);
-                        const id = randomUUID();
-                        qdrantClient.upsert("articles", {
-                            points: [
-                                {
-                                    id: id,
-                                    vector: embedding,
-                                    payload: {
-                                        title: jsonData.title,
-                                        content: jsonData.content,
-                                        url: jsonData.url,
-                                        datePublished: jsonData.datePublished,
+                        // Split text, generate embedding and upsert into Qdrant
+                        const texts_splitted = await split_text(article.content);
+                        texts_splitted.forEach(async (content) => {
+                            const embedding = await generateEmbedding(content, openAiClient);
+
+                            const id = randomUUID();
+                            qdrantClient.upsert("articles", {
+                                points: [
+                                    {
+                                        id: id,
+                                        vector: embedding,
+                                        payload: {
+                                            title: article.title,
+                                            content: article.content,
+                                            url: article.url,
+                                            datePublished: article.datePublished,
+                                        },
                                     },
-                                },
-                            ],
+                                ],
+                            })
                         })
-                    } else {
-                        throw new Error('No JSON data found in the response');
+                    } catch (e) {
+                    logger.debug('Error parsing message value:', e);
                     }
-                    
-                } catch (e) {
-                logger.debug('Error parsing message value:', e);
+                } else {
+                    logger.debug('Empty message');
                 }
-            } else {
-                logger.debug('Empty message');
-            }
-    
-            // Mostrar cabeçalhos se existirem
-            if (message.headers && Object.keys(message.headers).length > 0) {
-                logger.debug('Cabeçalhos:');
-                for (const [key, value] of Object.entries(message.headers)) {
-                    logger.debug(`  ${key}: ${value ? value.toString() : 'null'}`);
-                }
-            }
-            
-            logger.debug('----------------------------------------\n');
+                logger.debug('----------------------------------------\n');
             },
         });
 

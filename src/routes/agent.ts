@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { Agent } from '../ai/agent';
+import { ChatAgent } from '../ai/chatAgent';
 
 const router = Router();
 
 router.post("/", async (req, res) => {
   try {
     const { query } = req.body;
-    const agent = new Agent()
+    const agent = new ChatAgent()
     const {answer, source} = await agent.sendUserMessage(query)
     res.json({
       answer: answer,
