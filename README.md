@@ -38,7 +38,6 @@ I use OpenAI due to its comprehensive documentation, multi-language support, and
 
 I created two agents, one responsible for capturing relevant content on news HTML pages and another to answer user questions based on the news content, which I named "CleanHTMLAgent" and "ChatAgent". I used CleanHTMLAgent both in RAG and for the tool I created in my ChatAgent so that whenever a user places a link in the query it searches for it on the internet.
 
-Implemente
 ## 🆙 Improvements
 
 Given more time, I could implement several improvements to this project. Here are a few:
