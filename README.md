@@ -28,19 +28,18 @@ To start our API, return to the root of the project and run `npm run dev`, or us
 
 ## ☁️ Design decisions
 
-Due to limited time, I chose to use technologies I’m already familiar with, such as Qdrant for the vector database and OpenAI.
+I chose to use technologies I’m already familiar with, such as Qdrant for the vector database and OpenAI.
 
-I separated the population script from the vector database in the `src/jobs` folder, which I usually reserve for scripts that I run in batches or reuse frequently in my systems. In this case, we could leave it running in the background and when it receives some new news it stores it in the vector database.
+I started by creating a script to prepare the vector database, naming it rag.ts in the src/jobs folder, where I usually keep useful scripts for my API. In this script, I connect to OpenAI, Qdrant, and Kafka. I begin consuming the Kafka database, and for each new piece of data that arrives, I take the returned URL, fetch its content, extract only the relevant part (the HTML body), and then call my CleanHTMLAgent to extract important data from the HTML using a structured JSON output. Finally, I generate the embeddings and store them in Qdrant along with the payload returned by my agent.
 
-I generally use Qdrant because it's a high-performance vector database built in Rust. Since I’ve worked with Rust, I feel confident it’s a reliable and stable choice.
+On the API side, I developed a separate agent for the chat. It’s specialized in performing semantic searches of the content in Qdrant and generating a response for the user based on the returned article. If the user includes a link in the message, it triggers a function that invokes the CleanHTMLAgent again to extract data from the provided link and returns a response based on it.
 
-I use OpenAI due to its comprehensive documentation, multi-language support, and the fact that it works well with Portuguese (which I typically use in my projects). However, in this case, I could experiment with other models like Anthropic or even use Amazon Bedrock to allow flexibility in choosing models.
-
-I created two agents, one responsible for capturing relevant content on news HTML pages and another to answer user questions based on the news content, which I named "CleanHTMLAgent" and "ChatAgent". I used CleanHTMLAgent both in RAG and for the tool I created in my ChatAgent so that whenever a user places a link in the query it searches for it on the internet.
 
 ## 🆙 Improvements
 
 Given more time, I could implement several improvements to this project. Here are a few:
+
+* Returns text streaming to the user
 
 * Implement a chat identification scheme to preserve each user’s previous messages.
 
@@ -50,5 +49,7 @@ Given more time, I could implement several improvements to this project. Here ar
 
 * Improve the division of texts by studying better the structure that best fits
 
-* Include news title embeddings
+* Include the article titles in the vector database
+
+* Perform semantic search only when necessary
 
