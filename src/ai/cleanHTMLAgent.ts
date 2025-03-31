@@ -72,8 +72,8 @@ export class CleanHTMLAgent{
             text: this.text,
         });
 
-        const dataResponse = response.output_text;
+        const dataResponse = JSON.parse(response.output_text);
         
-        return JSON.parse(dataResponse) as Article;
+        return dataResponse.article as Article;
     }
 }
