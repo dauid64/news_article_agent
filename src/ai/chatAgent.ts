@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import { Article } from "../models/articles";
 import { FunctionTool, ResponseFunctionToolCall } from "openai/resources/responses/responses";
 import { CleanHTMLAgent } from "./cleanHTMLAgent";
+import { observeOpenAI } from "langfuse";
 
 const tools = [{
   "type": "function",
@@ -33,9 +34,9 @@ export class ChatAgent {
     constructor() {
         logger.debug("Agent initialized");
         
-        this.client = new OpenAI({
+        this.client = observeOpenAI(new OpenAI({
                 apiKey: process.env['OPENAI_API_KEY'],
-        });
+        }));
         this.qdrantClient = new QdrantClient({url: 'http://127.0.0.1:6333'});
         
         this.systemPrompt = `
