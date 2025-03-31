@@ -2,39 +2,16 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 import logger from "../logger";
 import OpenAI from "openai";
 import { Article } from "../models/articles";
-import { FunctionTool, ResponseFunctionToolCall } from "openai/resources/responses/responses";
+import { FunctionTool, ResponseTextConfig } from "openai/resources/responses/responses";
 import { CleanHTMLAgent } from "./cleanHTMLAgent";
 import { observeOpenAI } from "langfuse";
-
-const tools = [{
-  "type": "function",
-  "name": "get_link_content",
-  "description": "Get content from a link.",
-  "parameters": {
-      "type": "object",
-      "properties": {
-          "url": {
-              "type": "string",
-              "description": "The URL to get content from.",
-          },
-            "userMessageContents": {
-                "type": "string",
-                "description": "The user message question.",
-            },
-      },
-      "required": [
-          "url",
-        "userMessageContents"
-      ],
-      "additionalProperties": false
-  },
-  "strict": true
-}] as FunctionTool[];
 
 export class ChatAgent {
     readonly client: OpenAI;
     readonly qdrantClient: QdrantClient;
     readonly systemPrompt: string;
+    readonly tools: FunctionTool[];
+    readonly text: ResponseTextConfig;
 
     constructor() {
         logger.debug("Agent initialized");
@@ -62,6 +39,72 @@ export class ChatAgent {
         Answer politely and directly. If you do not find the information in the article provided useful, simply respond that you could not find any relevant information. 
         If the user provides a link, please call tool web_search_preview for the link provided and provide the answer to the question.
         `
+
+        this.tools = [{
+            "type": "function",
+            "name": "get_link_content",
+            "description": "Get content from a link.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL to get content from.",
+                    },
+                      "userMessageContents": {
+                          "type": "string",
+                          "description": "The user message question.",
+                      },
+                },
+                "required": [
+                    "url",
+                  "userMessageContents"
+                ],
+                "additionalProperties": false
+            },
+            "strict": true
+          }] as FunctionTool[];
+
+          this.text = {
+            format: {
+                "type": "json_schema",
+                "name": "article",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "answer": {
+                            "type": "string",
+                            "description": "The answer to the question.",
+                        },
+                        "source": {
+                            "type": "object",
+                            "properties": {
+                                "title": {
+                                    "type": "string",
+                                    "description": "Title of the article.",
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "Content of the article.",
+                                },
+                                "url": {
+                                    "type": "string",
+                                    "description": "URL of the article.",
+                                },
+                                "datePublished": {
+                                    "type": "string",
+                                    "description": "Date published of the article.",
+                                }
+                            },
+                            "required": ["title", "content", "url", "datePublished"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "required": ["answer", "source"],
+                    "additionalProperties": false // <- adicionado aqui
+                }
+            }
+        }
     }
 
     private async generateEmbedding(texto: string, openAiClient: OpenAI): Promise<number[]> {
@@ -97,6 +140,7 @@ export class ChatAgent {
             model: 'gpt-4o',
             instructions: this.systemPrompt,
             input: `${userMessageContents}\n ${JSON.stringify(source)}`,
+            text: this.text
         });
         const answer = response.output_text;
         return answer;
@@ -134,8 +178,9 @@ export class ChatAgent {
                 model: 'gpt-4o',
                 instructions: this.systemPrompt,
                 input: `${userMessageContents}\n ${JSON.stringify(source)}`,
-                tools: tools,
-                tool_choice: "auto"
+                tools: this.tools,
+                tool_choice: "auto",
+                text: this.text,
             });
 
             let answer = response.output_text;
@@ -147,7 +192,7 @@ export class ChatAgent {
             }
             logger.debug(`Received answer: ${answer}`);
 
-            return {answer, source};
+            return JSON.parse(answer);
         } catch (error) {
             logger.error('Error in sendUserMessage:', error);
             throw error;
